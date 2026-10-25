@@ -369,7 +369,16 @@ fn deserialize_json_value<'de, D: Deserializer<'de>>(
             m.set_by_number(6, Value::Message(lv));
             Ok(m)
         }
-        fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Self::Value, A::Error> {
+        fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+            use buffa::json_helpers::JsonObjectKey;
+
+            let first = match map.next_key::<JsonObjectKey>()? {
+                Some(key @ JsonObjectKey::NumberToken) => {
+                    return self.visit_f64(key.into_number_f64(&mut map)?);
+                }
+                Some(JsonObjectKey::Field(field)) => Some(field),
+                None => None,
+            };
             let s_idx = self
                 .pool
                 .message_index("google.protobuf.Struct")
@@ -379,7 +388,7 @@ fn deserialize_json_value<'de, D: Deserializer<'de>>(
                 midx: s_idx,
                 budget: self.budget,
             }
-            .visit_map(map)?;
+            .read_fields(map, first)?;
             let mut m = DynamicMessage::new(self.pool, self.midx);
             m.set_by_number(5, Value::Message(s));
             Ok(m)
@@ -400,12 +409,23 @@ impl<'de> Visitor<'de> for StructVisitor<'_> {
         write!(f, "a JSON object")
     }
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        let first = map.next_key::<String>()?;
+        self.read_fields(map, first)
+    }
+}
+
+impl StructVisitor<'_> {
+    fn read_fields<'de, A: MapAccess<'de>>(
+        self,
+        mut map: A,
+        mut next: Option<String>,
+    ) -> Result<DynamicMessage, A::Error> {
         let value_idx = self
             .pool
             .message_index("google.protobuf.Value")
             .ok_or_else(|| de::Error::custom("Value not in pool"))?;
         let mut fields: Vec<(MapKey, Value)> = Vec::new();
-        while let Some(key) = map.next_key::<String>()? {
+        while let Some(key) = next {
             // The Value seed deliberately doesn't carry the parse flags:
             // `google.protobuf.Value` is a closed schema (null/bool/number/
             // string/Struct/ListValue) that cannot recurse into a
@@ -423,6 +443,7 @@ impl<'de> Visitor<'de> for StructVisitor<'_> {
                 core::mem::size_of::<MapKey>() + core::mem::size_of::<Value>(),
             )?;
             fields.push((MapKey::String(key), Value::Message(v)));
+            next = map.next_key::<String>()?;
         }
         let mut m = DynamicMessage::new(self.pool, self.midx);
         m.set_by_number(1, Value::Map(MapValue::from_entries(fields)));
