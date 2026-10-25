@@ -1,3 +1,3 @@
 kind: Fixed
-body: Preserve google.protobuf.NullValue as JSON null in byte-key maps while ordinary enum values retain null rejection.
+body: Preserve google.protobuf.NullValue as JSON null in byte-key maps while ordinary enum values retain null rejection. Keep owned and borrowed map serialization consistent.
 time: 2026-10-24T16:02:26.8925546+02:00

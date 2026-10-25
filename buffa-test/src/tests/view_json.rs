@@ -831,4 +831,22 @@ mod byte_key_enum_maps {
             owned
         );
     }
+
+    #[test]
+    fn null_value_byte_key_views_match_owned_json() {
+        let mut owned: EnumMapsNoValidation =
+            serde_json::from_str(r#"{"nullValues":{"eA==":null}}"#).unwrap();
+        assert_view_json_value_parity!(
+            crate::utf8test::__buffa::view::EnumMapsNoValidationView,
+            owned.clone()
+        );
+        owned
+            .null_values
+            .insert(b"x".to_vec(), buffa::EnumValue::Unknown(42));
+        assert!(serde_json::to_value(&owned).unwrap()["nullValues"]["eA=="].is_null());
+        assert_view_json_value_parity!(
+            crate::utf8test::__buffa::view::EnumMapsNoValidationView,
+            owned
+        );
+    }
 }
