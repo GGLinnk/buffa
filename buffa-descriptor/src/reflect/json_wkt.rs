@@ -105,7 +105,9 @@ impl WktKind {
                 if let Some(Value::List(items)) = msg.field_by_number(1) {
                     for v in items {
                         let Value::Message(inner) = v else {
-                            return Err(serde::ser::Error::custom("ListValue elem must be message"));
+                            return Err(serde::ser::Error::custom(
+                                "ListValue elem must be message",
+                            ));
                         };
                         seq.serialize_element(&Nested::charge(inner, depth)?)?;
                     }
@@ -180,7 +182,10 @@ impl WktKind {
                     }
                     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
                         if self.ignore_unknown {
-                            while map.next_entry::<de::IgnoredAny, de::IgnoredAny>()?.is_some() {}
+                            while map
+                                .next_entry::<de::IgnoredAny, de::IgnoredAny>()?
+                                .is_some()
+                            {}
                             return Ok(());
                         }
                         if let Some(key) = map.next_key::<String>()? {
@@ -492,11 +497,7 @@ fn deserialize_list_value<'de, D: Deserializer<'de>>(
 /// of `depth`, and its binary decode runs on the *remaining* budget rather
 /// than a fresh [`RECURSION_LIMIT`], so nesting inside `Any.value` — which
 /// the outer decode saw only as opaque bytes — cannot restart the count.
-fn serialize_any<S: Serializer>(
-    msg: &DynamicMessage,
-    depth: u32,
-    s: S,
-) -> Result<S::Ok, S::Error> {
+fn serialize_any<S: Serializer>(msg: &DynamicMessage, depth: u32, s: S) -> Result<S::Ok, S::Error> {
     use serde::ser::Error as _;
     let type_url = match msg.field_by_number(1) {
         Some(Value::String(u)) => u.as_str(),
@@ -654,7 +655,6 @@ fn resolve_any_type(pool: &DescriptorPool, type_url: &str) -> Option<MessageInde
     let name = type_url.rsplit('/').next()?;
     pool.message_index(name)
 }
-
 
 // ── Timestamp / Duration / FieldMask formatting ─────────────────────────────
 //
