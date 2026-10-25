@@ -32,8 +32,11 @@
 //! types, and functions for `#[serde(deserialize_with = "...")]`.
 
 pub mod buffered;
+mod number_key;
 #[doc(hidden)]
 pub mod wkt;
+#[doc(hidden)]
+pub use number_key::JsonObjectKey;
 
 use buffered::BufferedValue;
 
