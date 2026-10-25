@@ -799,3 +799,36 @@ mod proto2 {
         );
     }
 }
+
+mod byte_key_enum_maps {
+    use super::*;
+    use crate::utf8test::EnumMapsNoValidation;
+
+    #[test]
+    fn null_value_byte_key_maps_round_trip_null() {
+        let owned: EnumMapsNoValidation =
+            serde_json::from_str(r#"{"nullValues":{"eA==":null}}"#).unwrap();
+        assert_eq!(owned.null_values[b"x".as_slice()].to_i32(), 0);
+        let json = serde_json::to_value(&owned).unwrap();
+        assert!(json["nullValues"]["eA=="].is_null());
+        let decoded: EnumMapsNoValidation = serde_json::from_value(json).unwrap();
+        assert_eq!(decoded, owned);
+    }
+
+    #[test]
+    fn ordinary_enum_byte_key_maps_keep_their_json_contract() {
+        let owned: EnumMapsNoValidation =
+            serde_json::from_str(r#"{"ordinaryEnums":{"eA==":"MAP_VALUE_ACTIVE"}}"#).unwrap();
+        assert_eq!(owned.ordinary_enums[b"x".as_slice()].to_i32(), 1);
+        let json = serde_json::to_value(&owned).unwrap();
+        assert_eq!(json["ordinaryEnums"]["eA=="], "MAP_VALUE_ACTIVE");
+        assert!(
+            serde_json::from_str::<EnumMapsNoValidation>(r#"{"ordinaryEnums":{"eA==":null}}"#)
+                .is_err()
+        );
+        assert_view_json_value_parity!(
+            crate::utf8test::__buffa::view::EnumMapsNoValidationView,
+            owned
+        );
+    }
+}

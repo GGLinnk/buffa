@@ -387,6 +387,16 @@ pub fn generate_enum(
         quote! { #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)] }
     };
 
+    let json_null_impl = if proto_fqn == "google.protobuf.NullValue" {
+        quote! {
+            fn from_json_null() -> ::core::option::Option<Self> {
+                Self::from_i32(0)
+            }
+        }
+    } else {
+        TokenStream::new()
+    };
+
     // Proto enum values are SCREAMING_CASE variants. The module-tree wrapper
     // already allows this lint (`ALLOW_LINTS`), but a content file consumed
     // on its own (`include!` or `mod` without the wrapper) is not covered, so
@@ -440,6 +450,8 @@ pub fn generate_enum(
             fn values() -> &'static [Self] {
                 &[#(Self::#value_idents),*]
             }
+
+            #json_null_impl
         }
 
         #reflect_element_impl

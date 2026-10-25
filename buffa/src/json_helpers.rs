@@ -89,6 +89,8 @@ fn clamp_size_hint(hint: Option<usize>) -> usize {
 // A future YAML encoder would have different per-element rules (YAML has native
 // int64, no quoting needed) and would get its own trait.
 
+const NULL_ELEMENT_MESSAGE: &str = "null is not a valid repeated-field element or map value";
+
 /// Per-element proto3-JSON encoding.
 ///
 /// Implemented in this crate for primitives (i64 → quoted, f64 → NaN/Inf
@@ -103,11 +105,9 @@ pub trait ProtoElemJson: Sized {
     fn deserialize_proto_json<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error>;
     /// Deserialize a JSON `null` when it is a valid representation of this
     /// protobuf type inside a container. Most protobuf element types reject
-    /// `null`; `google.protobuf.Value` overrides this for its null variant.
+    /// `null`; types with a null representation override this hook.
     fn deserialize_proto_json_null<E: serde::de::Error>() -> Result<Self, E> {
-        Err(E::custom(
-            "null is not a valid repeated-field element or map value",
-        ))
+        Err(E::custom(NULL_ELEMENT_MESSAGE))
     }
 }
 
@@ -200,20 +200,12 @@ impl<E: crate::Enumeration> serde::Serialize for ClosedEnumSeqJson<'_, E> {
     }
 }
 
-/// Bridge seed: deserializes a single T via `ProtoElemJson::deserialize_proto_json`,
-/// but routes `null` to [`ProtoElemJson::deserialize_proto_json_null`], which
-/// REJECTS it by default. Per proto3 JSON spec, `null` as an element of a
-/// repeated field or as a map value is invalid (only the container itself may be
-/// `null`, meaning empty); `google.protobuf.Value` is the one type that
-/// overrides the hook, because `null` is one of its variants. The singular
-/// helper modules accept null → default, which is correct for singular fields
-/// but wrong for container elements.
+/// Decodes container elements with their type-specific null policy.
 struct ProtoElemSeed<T>(core::marker::PhantomData<T>);
 impl<'de, T: ProtoElemJson> serde::de::DeserializeSeed<'de> for ProtoElemSeed<T> {
     type Value = T;
     fn deserialize<D: serde::Deserializer<'de>>(self, d: D) -> Result<T, D::Error> {
-        // Peek-via-Option: serde_json calls visit_none for null. If the element
-        // is null, that's an error; otherwise deserialize normally.
+        // Dispatch null through the element type policy.
         struct NoNull<T>(core::marker::PhantomData<T>);
         impl<'de, T: ProtoElemJson> serde::de::Visitor<'de> for NoNull<T> {
             type Value = T;
@@ -1491,18 +1483,25 @@ impl ProtoElemJson for ::bytes::Bytes {
     }
 }
 
-// EnumValue<E> (open enums) — uses its own Serialize/Deserialize (which
-// handle proto JSON enum semantics: name string on serialize, accept name
-// or integer on deserialize, preserve unknown values as the int).
+// Open enums retain their Serde representation except for NullValue.
 impl<E: crate::Enumeration> ProtoElemJson for crate::EnumValue<E>
 where
     Self: serde::Serialize + serde::de::DeserializeOwned,
 {
     fn serialize_proto_json<S: serde::Serializer>(v: &Self, s: S) -> Result<S::Ok, S::Error> {
-        serde::Serialize::serialize(v, s)
+        if E::from_json_null().is_some() {
+            s.serialize_unit()
+        } else {
+            serde::Serialize::serialize(v, s)
+        }
     }
     fn deserialize_proto_json<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         <Self as serde::Deserialize>::deserialize(d)
+    }
+    fn deserialize_proto_json_null<Error: serde::de::Error>() -> Result<Self, Error> {
+        E::from_json_null()
+            .map(Self::Known)
+            .ok_or_else(|| Error::custom(NULL_ELEMENT_MESSAGE))
     }
 }
 
@@ -1510,8 +1509,7 @@ where
 /// `utf8_validation = NONE` produced `Vec<u8>` keys under strict mapping.
 ///
 /// Keys are serialized/deserialized as base64 strings (same as bytes values).
-/// Values use [`ProtoElemJson`] so container-specific ProtoJSON rules apply and
-/// `null` values are rejected.
+/// Values use [`ProtoElemJson`], including the element type's null policy.
 ///
 /// Use with `#[serde(with = "::buffa::json_helpers::bytes_key_map")]`.
 pub mod bytes_key_map {

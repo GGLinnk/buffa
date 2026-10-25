@@ -48,6 +48,15 @@ pub trait Enumeration: Clone + Copy + PartialEq + Eq + Hash + fmt::Debug {
     fn values() -> &'static [Self] {
         &[]
     }
+
+    /// Canonical value decoded from JSON null in ProtoJSON containers.
+    ///
+    /// Returns `None` for ordinary enums.
+    /// `Some` opts known and unknown numbers into container null encoding.
+    /// Reserved for enums with `google.protobuf.NullValue`-like semantics.
+    fn from_json_null() -> Option<Self> {
+        None
+    }
 }
 
 /// A protobuf enum field value that can hold either a known variant or an
