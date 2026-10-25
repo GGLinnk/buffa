@@ -72,6 +72,13 @@ pub(super) fn number_from_map<'de, A: de::MapAccess<'de>>(mut map: A) -> Result<
     key.into_number_value(&mut map)
 }
 
+pub(super) fn f64_from_map<'de, A: de::MapAccess<'de>>(mut map: A) -> Result<f64, A::Error> {
+    let key = map
+        .next_key::<JsonObjectKey>()?
+        .ok_or_else(|| de::Error::invalid_length(0, &"a JSON number token"))?;
+    key.into_number_f64(&mut map)
+}
+
 impl<'de> Deserialize<'de> for JsonObjectKey {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct KeyVisitor;

@@ -2387,6 +2387,38 @@ fn numeric_token_helpers_preserve_exact_integer_text() {
 }
 
 #[test]
+fn numeric_token_helpers_preserve_float_and_container_semantics() {
+    assert_eq!(
+        serde_json::from_str::<SerdeFloat>("1.25e1").unwrap().0,
+        12.5
+    );
+    assert_eq!(
+        serde_json::from_str::<SerdeDouble>("1.25e1").unwrap().0,
+        12.5
+    );
+    assert!(serde_json::from_str::<SerdeFloat>("1e100").is_err());
+    assert!(serde_json::from_str::<SerdeDouble>("1e400").is_err());
+    assert_eq!(
+        serde_json::from_str::<SerdeDouble>(r#""Infinity""#)
+            .unwrap()
+            .0,
+        f64::INFINITY
+    );
+    assert_eq!(
+        serde_json::from_str::<SeqI64Holder>("[1e1,-2e1]")
+            .unwrap()
+            .0,
+        vec![10, -20]
+    );
+    assert_eq!(
+        serde_json::from_str::<MapI32I64Holder>(r#"{"1":1e1}"#)
+            .unwrap()
+            .0[&1],
+        10
+    );
+}
+
+#[test]
 fn numeric_token_integer_binary64_boundary_has_explicit_expectations() {
     let mode = serde_json::from_str::<serde_json::Number>("1e1").unwrap();
     if serde_json::to_string(&mode).unwrap() == "10.0" {

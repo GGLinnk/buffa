@@ -1251,7 +1251,7 @@ int_serde_module!(
 ///
 /// A quoted decimal is parsed straight to `f32`, so it is rounded once, and
 /// so is an unquoted integer in the `i64` or `u64` range. Any other unquoted
-/// number reaches the visitor as the `f64` the deserializer parsed and is then
+/// number is decoded through an `f64` and is then
 /// narrowed to `f32`, so it is rounded twice. The results differ, by one `f32`
 /// ulp, when a decimal close to the midpoint between two adjacent `f32` values
 /// becomes that midpoint as an `f64`, which then rounds to even:
@@ -1262,8 +1262,9 @@ int_serde_module!(
 /// makes an unquoted value an error that parses when quoted.
 ///
 /// protobuf C++ also narrows a parsed `double`; protobuf-go rounds once. The
-/// `f64` does not identify the decimal it came from, so the decoding side
-/// cannot avoid this. A producer that wants single rounding can quote the
+/// `f64` does not identify the decimal it came from when supplied alone.
+/// The arbitrary-precision token path shares the same narrowing policy.
+/// A producer that wants single rounding can quote the
 /// value. Tracked in [#647](https://github.com/anthropics/buffa/issues/647).
 ///
 /// Use with `#[serde(with = "::buffa::json_helpers::float")]`.
@@ -1293,6 +1294,10 @@ pub mod float {
 
             fn visit_unit<E>(self) -> Result<f32, E> {
                 Ok(0.0)
+            }
+
+            fn visit_map<A: serde::de::MapAccess<'de>>(self, map: A) -> Result<f32, A::Error> {
+                self.visit_f64(super::number_key::f64_from_map(map)?)
             }
 
             fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<f32, E> {
@@ -1384,6 +1389,10 @@ pub mod double {
 
             fn visit_unit<E>(self) -> Result<f64, E> {
                 Ok(0.0)
+            }
+
+            fn visit_map<A: serde::de::MapAccess<'de>>(self, map: A) -> Result<f64, A::Error> {
+                self.visit_f64(super::number_key::f64_from_map(map)?)
             }
 
             fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<f64, E> {
